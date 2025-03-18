@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { readdir } from "fs/promises";
+import { swaggerUI } from "@hono/swagger-ui";
 
 interface Sound {
   id: number;
@@ -53,7 +54,7 @@ app.get("/sounds", async (c) => {
   const sounds = await generateApi();
   const search = c.req.header("search");
   if (search) {
-    // filiter by name and tags
+    // filter by name and tags
     const filteredSounds = sounds.filter(
       (sound) =>
         sound.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -102,9 +103,154 @@ app.get("/cover/:fileName", async (c) => {
   return c.json({ error: "Cover image not found" }, 404);
 });
 
+app.get(
+  "/ui",
+  swaggerUI({
+    url: "/doc",
+  }),
+);
+
+app.get("/doc", (c) => {
+  const openApiSpec = {
+    openapi: "3.0.0",
+    info: {
+      title: "Skills Music API V2",
+      version: "1.0.0",
+    },
+    paths: {
+      "/sounds": {
+        get: {
+          summary: "Retrieve a list of sounds",
+          parameters: [
+            {
+              in: "header",
+              name: "search",
+              schema: {
+                type: "string",
+              },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "A list of sounds",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: {
+                      $ref: "#/components/schemas/Sound",
+                    },
+                  },
+                },
+              },
+            },
+            "404": {
+              description: "No sounds found",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      error: {
+                        type: "string",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/audio/{fileName}": {
+        get: {
+          summary: "Retrieve an audio file",
+          parameters: [
+            {
+              in: "path",
+              name: "fileName",
+              required: true,
+              schema: {
+                type: "string",
+              },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "The audio file",
+              content: {
+                "audio/mpeg": {
+                  schema: {
+                    type: "string",
+                    format: "binary",
+                  },
+                },
+              },
+            },
+            "404": {
+              description: "Audio file not found",
+            },
+          },
+        },
+      },
+      "/cover/{fileName}": {
+        get: {
+          summary: "Retrieve a cover image",
+          parameters: [
+            {
+              in: "path",
+              name: "fileName",
+              required: true,
+              schema: {
+                type: "string",
+              },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "The cover image",
+              content: {
+                "image/jpeg": {
+                  schema: {
+                    type: "string",
+                    format: "binary",
+                  },
+                },
+              },
+            },
+            "404": {
+              description: "Cover image not found",
+            },
+          },
+        },
+      },
+    },
+    components: {
+      schemas: {
+        Sound: {
+          type: "object",
+          properties: {
+            id: { type: "integer" },
+            name: { type: "string" },
+            description: { type: "string" },
+            tags: { type: "array", items: { type: "string" } },
+            audio: { type: "string" },
+            cover: { type: "string" },
+          },
+        },
+      },
+    },
+  };
+
+  return c.json(openApiSpec);
+});
+
 Bun.serve({
   fetch: app.fetch,
   port: process.env.PORT || 3000,
 });
 
 console.log(`Server running on port ${process.env.PORT || 3000}`);
+console.log(
+  `Swagger UI available at http://localhost:${process.env.PORT || 3000}/ui`,
+);
